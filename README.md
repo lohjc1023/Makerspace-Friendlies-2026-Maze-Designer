@@ -7,5 +7,5 @@ Check out the maze designer [here](https://lohjc1023.github.io/Makerspace-Friend
 
 
 ### Example
-![Maze Example](Example.jpg)
+![Maze Example](Example.png)
 
