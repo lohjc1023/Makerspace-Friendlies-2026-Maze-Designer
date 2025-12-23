@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Makerspace Friendlies 2026 Maze Designer</title>
+<style>
+  body { font-family: sans-serif; background-color: #1a1a1a; color: white; text-align: center; }
+  .controls { margin-bottom: 15px; background: #333; padding: 10px; border-radius: 8px; display: inline-block; }
+  button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 4px; margin: 0 5px; }
+  .btn-active { outline: 2px solid #fff; font-weight: bold; }
+  
+  /* Tool colors */
+  #btn-wall { background-color: #444; color: white; }
+  #btn-line { background-color: white; color: black; }
+  #btn-ball { background-color: #ffd700; color: black; }
+  #btn-checkpoint { background-color: #ff4444; color: white; }
+  #btn-reset { background-color: #666; color: white; }
+
+  .grid-container {
+    display: grid;
+    grid-template-columns: 30px repeat(14, 40px); /* 14 Columns A-N */
+    grid-template-rows: repeat(19, 40px) 30px;    /* 19 Rows 1-19 */
+    gap: 1px; /* show single gridline */
+    background: #333; /* gridline color */
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  .cell {
+    width: 40px;
+    height: 40px;
+    background-color: #000; /* Default floor is black */
+    border: none; /* remove inherent borders to prevent double lines */
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+  }
+
+  /* Grid Labels */
+  .label { display: flex; align-items: center; justify-content: center; font-weight: bold; color: #888; }
+  
+  /* Start Zone A19 */
+  .start-zone { outline: 2px dashed white; outline-offset: -1px; }
+  .start-zone::after { content: "S"; font-weight: bold; color: white; }
+
+  /* Free Track Zone Highlight (H11-N19) */
+  .free-track { box-shadow: inset 0 0 0 1px #ff00ff, inset 0 0 5px #ff00ff; }
+
+  /* Cell States */
+  .is-wall { background-color: #5ef179; } /* Green Walls */
+  .is-line {
+    background-color: #000;
+  }
+  /* Variations for lines can be added, simple vertical for now */
+  
+  .is-ball::before {
+    content: ""; position: absolute; width: 20px; height: 20px; 
+    background-color: #ffd700; border-radius: 50%; z-index: 2;
+  }
+  
+  .is-checkpoint::after {
+    /* Full-square overlay to ensure all sides are visible */
+    content: "";
+    position: absolute;
+    inset: 2px;
+    border: 2px solid #ff4444;
+    pointer-events: none;
+  }
+
+  /* Wall edges overlay (per-side drawing) */
+  .wall-overlay {
+    position: absolute;
+    inset: 0; /* align exactly to cell edges */
+    pointer-events: none;
+    box-sizing: border-box;
+  }
+  .wall-top { border-top: 3px solid #5ef179; }
+  .wall-right { border-right: 3px solid #5ef179; }
+  .wall-bottom { border-bottom: 3px solid #5ef179; }
+  .wall-left { border-left: 3px solid #5ef179; }
+
+  /* Line segments (thin white path to midpoints) */
+  .line-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-sizing: border-box;
+    z-index: 1;
+  }
+  .line-seg {
+    position: absolute;
+    background: white;
+    border-radius: 2px;
+    opacity: 0;
+    transition: opacity 80ms ease;
+  }
+  .line-seg.active { opacity: 1; }
+  .line-top { width: 2px; height: 50%; top: 0; left: 50%; transform: translateX(-50%); }
+  .line-bottom { width: 2px; height: 50%; bottom: 0; left: 50%; transform: translateX(-50%); }
+  .line-left { height: 2px; width: 50%; left: 0; top: 50%; transform: translateY(-50%); }
+  .line-right { height: 2px; width: 50%; right: 0; top: 50%; transform: translateY(-50%); }
+  .line-center { width: 4px; height: 4px; border-radius: 50%; background: white; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0; }
+  .line-center.active { opacity: 1; }
+
+  /* Hover preview for wall placement */
+  .hover-top { box-shadow: inset 0 3px 0 rgba(0, 255, 255, 0.8); }
+  .hover-right { box-shadow: inset -3px 0 0 rgba(0, 255, 255, 0.8); }
+  .hover-bottom { box-shadow: inset 0 -3px 0 rgba(0, 255, 255, 0.8); }
+  .hover-left { box-shadow: inset 3px 0 0 rgba(0, 255, 255, 0.8); }
+
+  .legend { margin-top: 20px; font-size: 0.9em; color: #aaa; }
+</style>
+</head>
+<body>
+
+<h1>Makerspace Friendlies 2026 Maze Designer</h1>
+
+<div class="controls">
+  <span>Select Tool: </span>
+  <button id="btn-wall" onclick="setTool('wall')">Wall</button>
+  <button id="btn-line" onclick="setTool('line')">Line</button>
+  <button id="btn-ball" onclick="setTool('ball')">Ball</button>
+  <button id="btn-checkpoint" onclick="setTool('checkpoint')">Checkpoint</button>
+  <button id="btn-reset" onclick="setTool('reset')">Reset Cell</button>
+  <button onclick="clearGrid()" style="background-color: #888; color: white; margin-left: 20px;">Reset Maze</button>
+</div>
+
+<div id="grid" class="grid-container">
+  </div>
+
+<div class="legend">
+  <p><strong>Instructions:</strong> Click and drag to paint. <br>
+  <strong>Free-Track Zone (H11-N19)</strong> is outlined in Pink.<br>
+  <strong>Start Zone (A19)</strong> is marked 'S'.<br>
+  Take a screenshot (Windows+Shift+S or Cmd+Shift+4) to save your design.</p>
+</div>
+
+<script>
+  // Configuration
+  const rows = 19;
+  const cols = 14; // A-N
+  const colLabels = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N"];
+  
+  let currentTool = 'line';
+  let isDrawing = false;
+  let cellLookup = {};
+  const lineSegments = ['top','right','bottom','left'];
+
+  function initGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    cellLookup = {};
+
+    // Create Row Labels (19 down to 1) and Cells
+    for (let r = rows; r >= 1; r--) {
+      // Row Label
+      const rowLabel = document.createElement('div');
+      rowLabel.className = 'label';
+      rowLabel.innerText = r;
+      grid.appendChild(rowLabel);
+
+      // Cells A-N for this row
+      for (let c = 0; c < cols; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.row = r;
+        cell.dataset.col = c; // 0-13
+
+        // Line overlay container with segments
+        const lineOverlay = document.createElement('div');
+        lineOverlay.className = 'line-overlay';
+        ['top','right','bottom','left','center'].forEach(part => {
+          const seg = document.createElement('div');
+          seg.className = `line-seg line-${part}`;
+          lineOverlay.appendChild(seg);
+        });
+        cell.appendChild(lineOverlay);
+
+        // Wall overlay container
+        const wallOverlay = document.createElement('div');
+        wallOverlay.className = 'wall-overlay';
+        cell.appendChild(wallOverlay);
+
+        // Store reference
+        cellLookup[`${r}-${c}`] = cell;
+
+        // Identify Zones
+        // Start Zone: A19 (Col 0, Row 19)
+        if (c === 0 && r === 19) cell.classList.add('start-zone');
+
+        // Free-Track Zone: H11 to N19 (Cols 7-13, Rows 11-19)
+        // H is index 7.
+        if (c >= 7 && r >= 11) cell.classList.add('free-track');
+
+        // Event Listeners for drawing
+        cell.addEventListener('mousedown', (e) => { isDrawing = true; applyTool(cell, e); });
+        cell.addEventListener('mousemove', (e) => { handleHover(cell, e); if (isDrawing) applyTool(cell, e); });
+        cell.addEventListener('mouseleave', () => clearHover(cell));
+        cell.addEventListener('mouseup', () => { isDrawing = false; });
+        
+        grid.appendChild(cell);
+      }
+    }
+
+    // Bottom Labels (Empty corner + A-N)
+    const corner = document.createElement('div');
+    grid.appendChild(corner);
+    
+    for (let c = 0; c < cols; c++) {
+      const colLabel = document.createElement('div');
+      colLabel.className = 'label';
+      colLabel.innerText = colLabels[c];
+      grid.appendChild(colLabel);
+    }
+    
+    // Stop drawing if mouse leaves grid
+    document.body.addEventListener('mouseup', () => { isDrawing = false; });
+  }
+
+  function setTool(tool) {
+    currentTool = tool;
+    // Update button styles
+    document.querySelectorAll('button').forEach(b => b.classList.remove('btn-active'));
+    document.getElementById('btn-' + tool).classList.add('btn-active');
+  }
+
+  function applyTool(cell, event) {
+    // Reset classes except zones
+    const isStart = cell.classList.contains('start-zone');
+    const isFree = cell.classList.contains('free-track');
+
+    if (currentTool === 'reset') {
+      resetCell(cell, isStart, isFree);
+      return;
+    }
+
+    if (currentTool === 'wall') {
+      const edge = getEdgeFromEvent(cell, event);
+      if (!edge) return;
+      toggleWall(cell, edge);
+    } else if (currentTool === 'line') {
+      const edge = getEdgeFromEvent(cell, event);
+      if (!edge) return;
+      toggleLine(cell, edge);
+    } else if (currentTool === 'ball') {
+      // Toggle ball on top of whatever is there
+      cell.classList.toggle('is-ball');
+    } else if (currentTool === 'checkpoint') {
+      cell.classList.toggle('is-checkpoint');
+    }
+  }
+
+  function clearGrid() {
+    if(confirm("Clear entire maze?")) initGrid();
+  }
+
+  function resetCell(cell, isStart, isFree) {
+    // Remove all custom states while preserving zone decorations
+    cell.className = 'cell' + (isStart ? ' start-zone' : '') + (isFree ? ' free-track' : '');
+    const overlay = cell.querySelector('.wall-overlay');
+    if (overlay) overlay.className = 'wall-overlay';
+    const lineOverlay = cell.querySelector('.line-overlay');
+    if (lineOverlay) lineOverlay.className = 'line-overlay';
+  }
+
+  function getEdgeFromEvent(cell, event) {
+    if (!event) return null;
+    const rect = cell.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    const distances = [
+      { edge: 'top', value: y },
+      { edge: 'bottom', value: rect.height - y },
+      { edge: 'left', value: x },
+      { edge: 'right', value: rect.width - x },
+    ];
+    distances.sort((a, b) => a.value - b.value);
+    return distances[0].edge;
+  }
+
+  function toggleWall(cell, edge) {
+    const overlay = cell.querySelector('.wall-overlay');
+    if (!overlay) return;
+    const className = `wall-${edge}`;
+    const hasWall = overlay.classList.contains(className);
+
+    if (hasWall) overlay.classList.remove(className);
+    else overlay.classList.add(className);
+
+    // Mirror to adjacent cell so shared borders stay consistent
+    const row = parseInt(cell.dataset.row, 10);
+    const col = parseInt(cell.dataset.col, 10);
+    const neighbor = getNeighborCell(row, col, edge);
+    if (neighbor) {
+      const neighborOverlay = neighbor.querySelector('.wall-overlay');
+      const opposite = getOppositeEdge(edge);
+      if (neighborOverlay) {
+        if (hasWall) neighborOverlay.classList.remove(`wall-${opposite}`);
+        else neighborOverlay.classList.add(`wall-${opposite}`);
+      }
+    }
+  }
+
+  function getNeighborCell(row, col, edge) {
+    let r = row, c = col;
+    if (edge === 'top') r += 1;
+    if (edge === 'bottom') r -= 1;
+    if (edge === 'left') c -= 1;
+    if (edge === 'right') c += 1;
+    return cellLookup[`${r}-${c}`];
+  }
+
+  function getOppositeEdge(edge) {
+    return { top: 'bottom', bottom: 'top', left: 'right', right: 'left' }[edge];
+  }
+
+  function handleHover(cell, event) {
+    if (currentTool !== 'wall') return;
+    const overlay = cell.querySelector('.wall-overlay');
+    if (!overlay) return;
+    const edge = getEdgeFromEvent(cell, event);
+    if (cell._hoverEdge === edge) return;
+    clearHover(cell);
+    if (edge) {
+      overlay.classList.add(`hover-${edge}`);
+      cell._hoverEdge = edge;
+    }
+  }
+
+  function clearHover(cell) {
+    if (!cell) return;
+    const overlay = cell.querySelector('.wall-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('hover-top', 'hover-right', 'hover-bottom', 'hover-left');
+    cell._hoverEdge = null;
+  }
+
+  function toggleLine(cell, edge) {
+    const overlay = cell.querySelector('.line-overlay');
+    if (!overlay) return;
+    const seg = overlay.querySelector(`.line-${edge}`);
+    if (!seg) return;
+
+    const isOn = seg.classList.contains('active');
+    if (isOn) seg.classList.remove('active');
+    else seg.classList.add('active');
+
+    updateLineCenter(overlay);
+
+    // Mirror to adjacent cell for shared connection
+    const row = parseInt(cell.dataset.row, 10);
+    const col = parseInt(cell.dataset.col, 10);
+    const neighbor = getNeighborCell(row, col, edge);
+    if (neighbor) {
+      const nOverlay = neighbor.querySelector('.line-overlay');
+      if (nOverlay) {
+        const opp = getOppositeEdge(edge);
+        const nSeg = nOverlay.querySelector(`.line-${opp}`);
+        if (nSeg) {
+          if (isOn) nSeg.classList.remove('active');
+          else nSeg.classList.add('active');
+          updateLineCenter(nOverlay);
+        }
+      }
+    }
+  }
+
+  function updateLineCenter(overlay) {
+    const hasAny = overlay.querySelector('.line-top.active, .line-right.active, .line-bottom.active, .line-left.active');
+    const center = overlay.querySelector('.line-center');
+    if (center) {
+      if (hasAny) center.classList.add('active');
+      else center.classList.remove('active');
+    }
+  }
+
+  // Initialize
+  initGrid();
+  setTool('line'); // Default tool
+</script>
+
+</body>
+</html>
